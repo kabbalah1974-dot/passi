@@ -1,0 +1,71 @@
+name: Costruisci APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: costruisci-apk
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
+
+      - name: Prova la logica
+        run: |
+          mkdir -p prova
+          javac -d prova Logic.java unit__LogicTests.java
+          java -cp prova it.passi.app.LogicTests
+
+      - name: Prepara il progetto
+        run: |
+          mkdir -p work/app/src/main/java/it/passi/app
+          cp settings.gradle.kts work/settings.gradle.kts
+          cp root.gradle.kts work/build.gradle.kts
+          cp app.gradle.kts work/app/build.gradle.kts
+          cp gradle.properties work/gradle.properties
+          cp digiuno.keystore work/app/digiuno.keystore
+          cp AndroidManifest.xml work/app/src/main/AndroidManifest.xml
+          for f in *.java; do
+            case "$f" in unit__*) ;; *) cp "$f" work/app/src/main/java/it/passi/app/ ;; esac
+          done
+          for f in res__*.xml; do
+            [ -e "$f" ] || continue
+            rest="${f#res__}"
+            dir="${rest%%__*}"
+            name="${rest#*__}"
+            mkdir -p "work/app/src/main/res/$dir"
+            cp "$f" "work/app/src/main/res/$dir/$name"
+          done
+
+      - name: Costruisci l'app
+        working-directory: work
+        run: gradle assembleRelease --no-daemon --stacktrace -PverCode=${{ github.run_number }}
+
+      - name: Prepara il file da installare
+        run: cp work/app/build/outputs/apk/release/app-release.apk passi.apk
+
+      - name: Pubblica l'app
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SUM=$(sha256sum passi.apk | cut -d' ' -f1)
+          NOTES="Versione costruita automaticamente (numero ${{ github.run_number }}). SHA-256: $SUM"
+          gh release delete ultima --yes --cleanup-tag || true
+          gh release create ultima passi.apk --title "Passi" --notes "$NOTES" --target "${{ github.sha }}"

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- anello sottile: il cammino -->
+    <path
+        android:pathData="M54,24 A30,30 0 1,1 24,54"
+        android:fillColor="#00000000"
+        android:strokeColor="#D4AF6A"
+        android:strokeWidth="3"
+        android:strokeLineCap="round" />
+
+    <!-- impronta sinistra (oro) -->
+    <group android:rotation="-14" android:pivotX="44" android:pivotY="64">
+        <path
+            android:pathData="M44,54 C38,54 35.5,60 35.5,65.5 C35.5,71 39,75 44,75 C49,75 52.5,71 52.5,65.5 C52.5,60 50,54 44,54 Z"
+            android:fillColor="#D4AF6A" />
+        <path
+            android:pathData="M44,46 m-4.2,0 a4.2,4.2 0 1,0 8.4,0 a4.2,4.2 0 1,0 -8.4,0"
+            android:fillColor="#D4AF6A" />
+    </group>
+
+    <!-- impronta destra (verde acqua), più in alto -->
+    <group android:rotation="-14" android:pivotX="63" android:pivotY="49">
+        <path
+            android:pathData="M63,39 C57,39 54.5,45 54.5,50.5 C54.5,56 58,60 63,60 C68,60 71.5,56 71.5,50.5 C71.5,45 69,39 63,39 Z"
+            android:fillColor="#5FD0C0" />
+        <path
+            android:pathData="M63,31 m-4.2,0 a4.2,4.2 0 1,0 8.4,0 a4.2,4.2 0 1,0 -8.4,0"
+            android:fillColor="#5FD0C0" />
+    </group>
+</vector>
