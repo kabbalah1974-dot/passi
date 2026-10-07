@@ -191,6 +191,10 @@ final class Session {
     double kcal;
     long steps;
     long lastGoodFixMs;
+    // Per non perdere distanza e calorie quando il GPS rimane indietro rispetto ai passi
+    double gpsDist, gpsKcal;       // somma dei tratti misurati dal GPS
+    double stepDist, stepKcal;     // stima dai passi nei momenti in cui il GPS era attivo
+    double topDist, topKcal;       // integrazione già aggiunta ai totali
 
     Session(long startMs, int type) {
         this.startMs = startMs;
@@ -208,19 +212,30 @@ final class Session {
 
     String encode() {
         return startMs + "," + type + "," + String.format(Locale.US, "%.1f", distM) + ","
-            + String.format(Locale.US, "%.3f", kcal) + "," + steps + "," + lastGoodFixMs;
+            + String.format(Locale.US, "%.3f", kcal) + "," + steps + "," + lastGoodFixMs + ","
+            + String.format(Locale.US, "%.1f", gpsDist) + "," + String.format(Locale.US, "%.3f", gpsKcal) + ","
+            + String.format(Locale.US, "%.1f", stepDist) + "," + String.format(Locale.US, "%.3f", stepKcal) + ","
+            + String.format(Locale.US, "%.1f", topDist) + "," + String.format(Locale.US, "%.3f", topKcal);
     }
 
     static Session decode(String s) {
         if (s == null || s.isEmpty()) return null;
         String[] f = s.split(",");
-        if (f.length != 6) return null;
+        if (f.length != 6 && f.length != 12) return null;
         try {
             Session x = new Session(Long.parseLong(f[0].trim()), Integer.parseInt(f[1].trim()));
             x.distM = Double.parseDouble(f[2].trim());
             x.kcal = Double.parseDouble(f[3].trim());
             x.steps = Long.parseLong(f[4].trim());
             x.lastGoodFixMs = Long.parseLong(f[5].trim());
+            if (f.length == 12) {
+                x.gpsDist = Double.parseDouble(f[6].trim());
+                x.gpsKcal = Double.parseDouble(f[7].trim());
+                x.stepDist = Double.parseDouble(f[8].trim());
+                x.stepKcal = Double.parseDouble(f[9].trim());
+                x.topDist = Double.parseDouble(f[10].trim());
+                x.topKcal = Double.parseDouble(f[11].trim());
+            }
             if (x.startMs <= 0 || x.distM < 0 || x.kcal < 0 || x.steps < 0) return null;
             return x;
         } catch (NumberFormatException e) {
@@ -448,8 +463,25 @@ final class Engine {
             credit(dayKey, delta, Body.stepsKcal(delta, kg, st), Body.stepsDistM(delta, st));
         } else {
             credit(dayKey, delta, 0, 0);
+            double st = stride();
+            session.stepDist += Body.stepsDistM(delta, st);
+            session.stepKcal += Body.stepsKcal(delta, kg, st);
+            topUp(dayKey);
         }
         log.add(ms, cum);
+    }
+
+    /** Se il GPS ha misurato meno di quanto dicono i passi (per esempio al chiuso), si usa il valore più alto. */
+    private void topUp(String dayKey) {
+        Session s = session;
+        if (s == null) return;
+        double dd = Math.max(0, s.stepDist - s.gpsDist) - s.topDist;
+        double dk = Math.max(0, s.stepKcal - s.gpsKcal) - s.topKcal;
+        if (Math.abs(dd) > 1e-9 || Math.abs(dk) > 1e-9) {
+            s.topDist += dd;
+            s.topKcal += dk;
+            credit(dayKey, 0, dk, dd);
+        }
     }
 
     void onFix(long ms, double lat, double lon, double acc, String dayKey) {
@@ -462,6 +494,9 @@ final class Engine {
         double kcal = Met.netMet(kmh) * kg * s.dtSec / 3600.0;
         long est = hasStepSensor ? 0 : Math.round(s.distM / stride());
         credit(dayKey, est, kcal, s.distM);
+        session.gpsDist += s.distM;
+        session.gpsKcal += kcal;
+        topUp(dayKey);
         log.add(ms, cum);
     }
 

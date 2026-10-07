@@ -33,6 +33,7 @@ final class LogicTests {
         engineSession();
         engineGpsWalk();
         logAndSince();
+        gpsIndoors();
         formats();
         System.out.println("Prove riuscite: " + passed + ", fallite: " + failed);
         if (failed > 0) System.exit(1);
@@ -219,7 +220,7 @@ final class LogicTests {
         // con GPS fresco: i passi contano ma non le calorie (le dà il GPS)
         e.onFix(25000, 45, 9, 5, D1);
         e.onStepCounter(30000, 1200, D1);
-        check(e.session.steps == 200 && near(e.session.kcal, kcalNoGps, 1e-9), "GPS fresco: passi senza doppie calorie");
+        check(e.session.steps == 200 && e.session.kcal > kcalNoGps, "GPS fresco ma fermo: calorie integrate dai passi");
         // GPS non più fresco dopo 20 s: si torna alla stima dai passi
         e.onStepCounter(60000, 1300, D1);
         check(e.session.kcal > kcalNoGps, "GPS vecchio: torna ai passi");
@@ -309,6 +310,27 @@ final class LogicTests {
         check(m.pts.size() == 2, "punti ravvicinati si fondono (tranne il primo)");
         m.add(5000, new Totals(99, 9, 9));
         check(m.pts.size() == 2, "tempo che torna indietro ignorato");
+    }
+
+    private static void gpsIndoors() {
+        Engine e = newEngine();
+        e.hasStepSensor = true;
+        long base = 1000000;
+        String d = "20261007";
+        e.startSession(base, 0);
+        e.onStepCounter(base, 1000, d);
+        // un solo punto GPS buono, poi il GPS resta fermo (al chiuso)
+        e.onFix(base + 1000, 45.0, 9.0, 10, d);
+        for (int i = 1; i <= 8; i++) e.onStepCounter(base + 1000 + i * 5000, 1000 + i * 100, d);
+        double expDist = 800 * Body.strideM(170, true);
+        double expKcal = Body.stepsKcal(800, 70, Body.strideM(170, true));
+        check(e.session.steps == 800, "passi in attività GPS ferma");
+        check(near(e.session.distM, expDist, 1.0), "distanza integrata dai passi: " + e.session.distM);
+        check(near(e.session.kcal, expKcal, 0.5), "calorie integrate dai passi: " + e.session.kcal);
+        check(near(e.today(d).distM, e.session.distM, 1.0), "totale giorno = attività");
+        Session r = Session.decode(e.session.encode());
+        check(r != null && near(r.topDist, e.session.topDist, 0.1), "integrazione salvata e riletta");
+        check(Session.decode("1000,0,5.0,1.000,10,500") != null, "vecchio formato ancora leggibile");
     }
 
     private static void formats() {
